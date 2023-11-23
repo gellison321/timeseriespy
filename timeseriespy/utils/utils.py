@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks
+import os
 
 def interpolate(array, length):
     '''
@@ -124,6 +125,31 @@ def find_peaks(array, min_dist = 60, thres = 0.9):
     '''
     return find_peaks(array, height=np.quantile(array, thres), distance=min_dist)[0]
 
+def set_window(I, J, w = None):
+    '''
+    Sets the window parameter of the dynamic time warping algorithm. The window parameter
+    is used to limit the search space of the algorithm.
+    
+    Parameters:
+        I: array-like, shape = (I_length, )
+        J: array-like, shape = (J_length, )
+        w: int or float
+            If w is an int, the window is set to w.
+            If w is a float, the window is set to int(max([I_length, J_length])*w).
+    
+    Returns:
+        window: int
+    '''
+    n, m = I.size, J.size 
+    if w is None:
+        return int(max([n, m])*0.1)
+    elif type(w) is int:
+        return w
+    elif type(w) is float:
+        return int(max([n, m])*w)
+    else:
+        raise TypeError('window must be an int or float')
+
 utils = {'interpolate' : interpolate,
         'reinterpolate' : reinterpolate,
         'pad' : pad,
@@ -131,5 +157,7 @@ utils = {'interpolate' : interpolate,
         'find_peaks' : find_peaks,
         'first_peak' : find_first_peak,
         'z_normalize' : z_normalize,
-        'z' : z
+        'z' : z,
+        'argmin' : argmin,
+        'set_window' : set_window
         }

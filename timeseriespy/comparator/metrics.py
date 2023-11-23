@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.signal import correlate
-from timeseriespy.utils.utils import *
-from timeseriespy.comparator.dynamic_time_warping import *
+from timeseriespy.utils.utils import utils
+from timeseriespy.comparator.dynamic_time_warping import dynamic_time_warping
 
 def early_abandon_euclidean_distance(I, J, r = None) -> float:
     '''

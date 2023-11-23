@@ -1,6 +1,7 @@
 from timeseriespy.comparator.metrics import metrics
 from timeseriespy.timeseries.barycenter import barycenters
 import numpy as np
+import multiprocessing
 
 class KMeans():
     
@@ -12,7 +13,7 @@ class KMeans():
         self.metric = metric
         self.method = averaging
         
-    def _assign_clusters(self, X):
+    def _assign_clusters(self, X, centroids):
         '''
         Assigns each instance of X to the nearest centroid.
 
@@ -21,7 +22,7 @@ class KMeans():
         Returns:
             clusters: array-like, shape = (n_instances, 1)
         '''
-        return [np.argmin(np.array([metrics[self.metric](x, centroid)**2 for centroid in self.centroids])) for x in X]
+        return [np.argmin(np.array([metrics[self.metric](x, centroid)**2 for centroid in centroids])) for x in X]
     
     def _initialize_centroids(self, k_centroids):
         '''
@@ -35,7 +36,7 @@ class KMeans():
         centroids = [self.X[np.random.randint(0, self.X.shape[0])] for _ in range(k_centroids)]
         return np.array(centroids, dtype = self.dtype)
 
-    def _update_centroids(self, X):
+    def _update_centroids(self, X, centroids, clusters):
         '''
         Updates the centroids by computing the barycenter of each cluster.
         
@@ -45,17 +46,17 @@ class KMeans():
             new_centroids: array-like, shape = (k_centroids, length)
         '''
         new_centroids = []
-        for k in range(len(self.centroids)):  
-            cluster = X[np.where(self.clusters==k)[0]]
+        for k in range(len(centroids)):  
+            cluster = X[np.where(clusters==k)[0]]
             if cluster.shape[0] == 0:
-                new_centroids.append(self.centroids[k])
+                new_centroids.append(centroids[k])
             elif cluster.shape[0] == 1:
                 new_centroids.append(cluster[0])
             else:
                 new_centroids.append(barycenters[self.method](cluster))
         return np.array(new_centroids, dtype = self.dtype)
 
-    def _check_solution(self, new_centroids):
+    def _check_solution(self, new_centroids, old_centroids):
         '''
         Checks if the solution has converged by checking whether the new centroids 
         are equal to the old centroids.
@@ -65,25 +66,27 @@ class KMeans():
         Returns:
             bool
         '''
-        return np.all([np.array_equal(self.centroids[i], new_centroids[i]) for i in range(len(self.centroids))])
-    
-    def _get_inertia(self):
-        return sum([metrics[self.metric](self.X[i], self.centroids[self.clusters[i]])**2 for i in range(len(self.X))])
+        return all([np.array_equal(old_centroids[i], new_centroids[i]) for i in range(len(old_centroids))])
 
-    def local_kmeans(self):
+    def local_kmeans(self, i = None):
         '''
         Solves the local cluster problem according to Lloyd's algorithm.
         '''
-        if len(self.centroids) < self.k_clusters:
-            self.centroids = self._initialize_centroids(self.k_clusters)
+        clusters = []
+        centroids = []
+        if len(centroids) < self.k_clusters:
+            centroids = self._initialize_centroids(self.k_clusters)
         for _ in range(self.max_iter):
-            self.clusters = self._assign_clusters(self.X)
-            new_centroids = self._update_centroids(self.X)
-            if self._check_solution(new_centroids):
+            clusters = self._assign_clusters(self.X, centroids)
+            new_centroids = self._update_centroids(self.X, centroids, clusters)
+            if self._check_solution(new_centroids, centroids):
                 break
             else:
-                self.centroids = new_centroids
-        self.inertia = self._get_inertia()
+                centroids = new_centroids
+        
+        inertia = sum([metrics[self.metric](self.X[i], centroids[clusters[i]])**2 for i in range(len(self.X))])
+
+        return clusters, centroids, inertia
 
     def sample_kmeans(self):
         '''
@@ -92,22 +95,44 @@ class KMeans():
         Parameters:
             X: array-like, shape = (n_instances, length)
         '''
-        cost = None
-        clusters = None
-        centroids = None
-        for _ in range(self.n_init):
-            self.centroids = []
-            self.clusters = []
-            self.local_kmeans()
-            if cost is None or self.inertia < cost:
-                cost = self.inertia
-                clusters = self.clusters
-                centroids = self.centroids
-        self.inertia = cost
-        self.clusters = clusters
-        self.centroids = centroids
+        best_cost = None
+        best_clusters = None
+        best_centroids = None
 
-    def fit(self, X):
+        for _ in range(self.n_init):
+            clusters, centroids, inertia = self.local_kmeans()
+            if best_cost is None or inertia < best_cost:
+                best_cost = inertia
+                best_clusters = clusters
+                best_centroids = centroids
+
+        self.inertia = best_cost
+        self.clusters = best_clusters
+        self.centroids = best_centroids
+
+    def sample_kmeans_parallel(self):
+
+        num_cpus = multiprocessing.cpu_count()
+        pool_size = max(1, num_cpus - 1) 
+
+        with multiprocessing.Pool(pool_size) as pool:
+            results = pool.map(self.local_kmeans, range(self.n_init))
+
+        best_cost = None
+        best_clusters = None
+        best_centroids = None
+
+        for clusters, centroids, inertia in results:
+            if best_cost is None or inertia < best_cost:
+                best_cost = inertia
+                best_clusters = clusters
+                best_centroids = centroids
+
+        self.inertia = best_cost
+        self.clusters = best_clusters
+        self.centroids = best_centroids
+
+    def fit(self, X, parallel = False):
         '''
         Checks the type of data for varied length arrays, and calls the sample_kmeans method.
         
@@ -118,7 +143,11 @@ class KMeans():
         '''
         self.dtype = object if np.any(np.diff(list(map(len, X)))!=0) else 'float64'
         self.X = np.array(X, dtype = self.dtype)
-        self.sample_kmeans()
+
+        if parallel:
+            self.sample_kmeans_parallel()
+        else:
+            self.sample_kmeans()
 
     def predict(self, X):
         '''

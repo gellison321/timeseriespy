@@ -1,6 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
+from timeseriespy.utils.utils import utils
 
 def match_lengths(I, J):
     '''
@@ -19,10 +18,11 @@ def match_lengths(I, J):
 
     # Interpolating the longer of the two time series down to the length of the smaller one
     if i_length < j_length:
-        J = interp1d(np.arange(0, j_length), J)(np.linspace(0.0, j_length-1, i_length))
+        J = utils['interpolate'](J, i_length)
     elif i_length > j_length:
-        I = interp1d(np.arange(0, i_length), I)(np.linspace(0.0, i_length-1, j_length))
+        I = utils['interpolate'](I, j_length)
     return I, J
+
 
 def euclidean_wedge(C): 
     '''
@@ -35,10 +35,11 @@ def euclidean_wedge(C):
     Returns:
         lower: array-like, shape = (length, )
     '''
-    if np.any(np.diff(list(map(len, C)))!=0):
-        raise ValueError('All series must be of the same length.')
-    
-    return np.min(C, axis = 0), np.max(C, axis = 0)
+    try:
+        return np.min(C, axis = 0), np.max(C, axis = 0)
+    except:
+        raise ValueError('Data must be two dimensionsal.')
+
 
 def DTW_wedge(C, w = 0):
     '''
@@ -54,8 +55,8 @@ def DTW_wedge(C, w = 0):
     Returns:
         lower: array-like, shape = (length, )
     '''
-    if np.any(np.diff(list(map(len, C)))!=0):
-        raise ValueError('All series must be of the same length.')
+    # if np.any(np.diff(list(map(len, C)))!=0):
+    #     raise ValueError('All series must be of the same length.')
     
     L, U = np.min(C, axis = 0), np.max(C, axis = 0)
     lower, upper = [],[]
@@ -66,6 +67,8 @@ def DTW_wedge(C, w = 0):
         lower.append(min(L[l:u]))
         upper.append(max(U[l:u]))
     return np.array(lower), np.array(upper)
+
+
 
 def LB_Keogh_squared_distances(q, C, r = np.inf):
     '''
@@ -79,22 +82,21 @@ def LB_Keogh_squared_distances(q, C, r = np.inf):
     Returns:
         sum: float
     '''
-
-    # Matching the lengths of the query and candidate series
+    r = r if r == np.inf else r**2
     q, C = match_lengths(q, C)
 
-    # Computing the lower bound
     sum = 0
     for i in range(len(q)):
         U = np.min(C[:,i])
         L = np.max(C[:,i])
         if q[i] < L:
             sum += (q[i] - L)**2
-        elif q[i] > U:
+        elif q[i] >= U:
             sum += (q[i] - U)**2
         if sum > r:
-            return sum
-    return sum
+            return sum**0.5
+    return sum**0.5
+ 
 
 def LB_Keogh_DTW(q, wedge, r = np.inf):
     '''
@@ -108,6 +110,7 @@ def LB_Keogh_DTW(q, wedge, r = np.inf):
     Returns:
         sum: float
     '''
+    r = r**2
     L,U = wedge[0], wedge[1]
     sum = 0
     for i in range(len(q)):
@@ -116,5 +119,11 @@ def LB_Keogh_DTW(q, wedge, r = np.inf):
         elif q[i] > U[i]:
             sum += (q[i] - U[i])**2
         if sum > r:
-            return sum
-    return sum
+            return sum**0.5
+    return sum**0.5
+
+bounding = {'match_lengths': match_lengths,
+            'euclidean_wedge': euclidean_wedge,
+            'DTW_wedge': DTW_wedge,
+            'LB_Keogh_squared_distances': LB_Keogh_squared_distances,
+            'LB_Keogh_DTW': LB_Keogh_DTW}

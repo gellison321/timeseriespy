@@ -1,5 +1,5 @@
 import numpy as np
-from timeseriespy.utils.utils import peaks
+from timeseriespy.utils.utils import utils
 
 #---------------------------------------------------------------------------#
 # Helper methods for statistical feature extraction in the TimeSeries class #
@@ -82,7 +82,7 @@ def mean_peak_length(array):
     Returns:
         peak_to_peak: float
     '''
-    peaks_array = peaks(array, thres =  0.9)
+    peaks_array = utils['find_peaks'](array, thres =  0.9)
     return np.mean([peaks_array[i-1] for i in range(1,len(peaks_array)+1)])
 
 def zero_crossings(array):

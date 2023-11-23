@@ -2,6 +2,7 @@ import numpy as np
 from timeseriespy.utils.utils import utils
 from timeseriespy.comparator.metrics import metrics
 from timeseriespy.timeseries.barycenter import barycenters
+from timeseriespy.comparator.comparator import query, pairwise_argmin
 from timeseriespy.timeseries.features import statistical_features, time_series_features, frequency_domain_features
 
 class TimeSeries:
@@ -44,28 +45,10 @@ class TimeSeries:
         return self
     
     def z_normalization(self):
-        '''
-        Normalizes the series by subtracting the mean and dividing by the standard deviation.
-        
-        Returns
-        -------
-        self : Shapelet
-            The Shapelet object with the normalized series.
-            
-        '''
         self.series = utils['z_normalize'](self.series)
         return self
     
     def min_max_normalization(self):
-        '''
-        Normalizes the series by subtracting the minimum and dividing by the maximum.
-        
-        Returns
-        -------
-        self : Shapelet
-            The Shapelet object with the normalized series.
-            
-        '''
         self.series = (self.series - np.min(self.series)) / (np.max(self.series) - np.min(self.series))
         return self
 
@@ -314,11 +297,41 @@ class TimeSeries:
     # The following methods extract shapelets from the candidates #
     #-------------------------------------------------------------#
 
-    def random_shapelet(self):
-        pass
+    def random_shapelet(self, qty, min_dist = 60, max_dist = 150, verbose = False):
+        '''
+        Extracts a random shapelet from the candidates.
 
-    def exhaustive_shapelet(self):
-        pass
+        Parameters
+        ----------
+        args : 
+            The arguments to be passed to the distance function.
+            min_dist : int
+                The minimum distance of random subsequences.
+            thres:
+            max_dist
+        '''
+        if verbose:
+            print(f'Extracting {qty} random candidates between [{min_dist}, {max_dist}]')
+        self.random_extraction(qty, min_dist, max_dist)
+        if verbose:
+            print(f'Calculating pairwise distances between {qty} candidates')
+        index = pairwise_argmin(self.candidates)
+        if verbose:
+            print(f'Extracting shapelet with minimum pairwise distance')
+        return self.candidates[index]
+    
+    def normal_shapelet(self, qty = None, min_dist = 10, max_dist = 100, thres = 0.9):
+        self.normal_extraction(qty, min_dist, max_dist, thres)
+        print(self.candidates.shape)
+        index = pairwise_argmin(self.candidates)
+        return self.candidates[index]
 
-    def barycenter_shapelet(self):
-        pass
+    def exhaustive_shapelet(self, *args):
+        self.windowed_extraction(args)
+        index = pairwise_argmin(self.candidates)
+        return self.candidates[index]
+
+    def barycenter_shapelet(self, *args):
+        self.peak_extraction(args)
+        self.candidates = barycenters(self.candidates)
+        return self.candidates[0]
